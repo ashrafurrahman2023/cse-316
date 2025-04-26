@@ -13,8 +13,7 @@ Exchange the 10th and 25th elements
 
 
 
-
-
+; ---------------------------------------------------done---------------------------------------------------
 ; This program checks if an array of words is sorted in ascending or descending order
 .MODEL SMALL
 .STACK 100H
@@ -116,6 +115,7 @@ END MAIN
 
 
 
+; ---------------------------------------------------done---------------------------------------------------
 
     
 ;------------------------------------------------------------
@@ -127,7 +127,7 @@ END MAIN
 .stack 100h                 ; 256-byte stack
 
 .data
-    inputStr   db 'qwertykeyboards', '$'  ; '$' terminator for INT 21h prints
+    inputStr   db 'qwertykeyboards', '$'  
     msgVowel   db 'Vowel Count: $'
     msgConso   db 'Consonant Count: $'
     vowelCount dw 0       ; 2-byte counter for vowels
@@ -196,8 +196,8 @@ done_scanning:
     call PrintDecimal
 
     ; Exit to DOS
-        mov ah, 4Ch
-        int 21h
+    mov ah, 4Ch
+    int 21h
 
 main endp
 
@@ -206,42 +206,71 @@ main endp
 ; Prints the unsigned value in AX as decimal digits.
 ; Destroys AX, CX, DX; preserves BX, SI, DI.
 ;------------------------------------------------------------
-PrintDecimal proc
-    
+; x8086 Assembly subroutine to print number in AX without newline
+.model small
+.stack 100h
+.data
+    num dw 1234    ; Example number to print
+
+.code
+main proc
+    mov ax, @data
+    mov ds, ax
+
+    ; Call print_number with number in AX
+    mov ax, num    ; Load number into AX
+    call print_number
+
+    ; Exit program
+    mov ah, 4Ch
+    int 21h
+main endp
+
+print_number proc
+    push bp        ; Save base pointer
+    mov bp, sp     ; Set up stack frame
+    push ax        ; Save registers used
     push bx
     push cx
     push dx
-    mov cx, 0            ; digit count
 
-    mov bx, 10           ; divisor
-    mov dx, 0
-convert_loop:
-    xor dx, dx           ; clear DX before DIV
-    div bx               ; AX ÷ 10 → AL = quotient, AH = remainder
-    push dx              ; save remainder (digit)
-    inc cx               ; count digits
-    mov ax, dx           ; quotient is in AL now? Actually quotient in AL, but after div quotient in AX?
-    mov ax, bx           ; WRONG, need to carefully recalc—let me correct below in comments
-    ; Actually: after DIV BX: AX → quotient in AX, DX → remainder. So:
-    ; We need to loop while quotient != 0:
-    mov ax, ax           ; check if quotient zero?
+    ; Handle special case: AX = 0
     cmp ax, 0
-    jne convert_loop
-
-    ; Pop and print each digit
-print_loop:
-    pop dx               ; get next digit (0–9)
-    add dl, '0'          ; convert to ASCII
-    mov ah, 2            ; DOS function 2 = print char in DL
+    jne not_zero
+    mov dl, '0'    ; Print '0'
+    mov ah, 02h
     int 21h
-    loop print_loop
+    jmp done
 
-    pop dx
+not_zero:
+    mov cx, 0      ; CX = digit count
+    mov bx, 10     ; BX = 10 for division
+
+    ; Convert number to digits by dividing by 10
+digit_loop:
+    mov dx, 0      ; Clear DX for division
+    div bx         ; AX = AX / 10, DX = remainder (digit)
+    add dl, '0'    ; Convert digit to ASCII ('0' to '9')
+    push dx        ; Push ASCII digit onto stack
+    inc cx         ; Increment digit count
+    cmp ax, 0      ; Check if quotient is 0
+    jne digit_loop ; If not, continue
+
+    ; Print digits by popping from stack
+print_loop:
+    pop dx         ; Get digit from stack
+    mov ah, 02h    ; DOS function: print character
+    int 21h        ; Print digit
+    loop print_loop ; Repeat for all digits
+
+done:
+    pop dx         ; Restore registers
     pop cx
     pop bx
     pop ax
-    ret
-PrintDecimal endp
+    pop bp         ; Restore base pointer
+    ret            ; Return to caller
+print_number endp
 
 end main
 
@@ -254,124 +283,11 @@ end main
 
 
 
-; This program counts vowels and consonants in a string
-.MODEL SMALL
-.STACK 100H
-
-.DATA
-    ; Define the string (null-terminated)
-    STR DB 'uyhitnae', 0  ; Test case 1
-    ; STR DB 'qwertykeyboards', 0  ; Test case 2
-    ; STR DB 'eruiaaageruiaaag', 0  ; Test case 3
-    
-    VOWEL_MSG DB 'Vowel Count: $'
-    CONSONANT_MSG DB 'Consonant Count: $'
-    VOWEL_COUNT DW 0      ; Counter for vowels
-    CONSONANT_COUNT DW 0  ; Counter for consonants
-
-.CODE
-MAIN PROC
-    ; Initialize data segment
-    MOV AX, @DATA
-    MOV DS, AX
-
-    ; Initialize string index
-    MOV SI, 0
-
-CHECK_LOOP:
-    ; Load current character
-    MOV AL, STR[SI]
-    CMP AL, 0          ; Check for null terminator
-    JE PRINT_RESULTS   ; If null, end of string reached
-
-    ; Check if character is a vowel (a, e, i, o, u)
-    CMP AL, 'a'
-    JE IS_VOWEL
-    CMP AL, 'e'
-    JE IS_VOWEL
-    CMP AL, 'i'
-    JE IS_VOWEL
-    CMP AL, 'o'
-    JE IS_VOWEL
-    CMP AL, 'u'
-    JE IS_VOWEL
-
-    ; If not a vowel, check if it’s a lowercase letter (a-z)
-    CMP AL, 'a'
-    JB NEXT_CHAR       ; If less than 'a', skip (not a letter)
-    CMP AL, 'z'
-    JA NEXT_CHAR       ; If greater than 'z', skip (not a letter)
-    ; If it’s a letter and not a vowel, it’s a consonant
-    INC CONSONANT_COUNT
-    JMP NEXT_CHAR
-
-IS_VOWEL:
-    INC VOWEL_COUNT    ; Increment vowel counter
-
-NEXT_CHAR:
-    INC SI             ; Move to next character
-    JMP CHECK_LOOP     ; Repeat loop
-
-PRINT_RESULTS:
-    ; Print vowel count message
-    LEA DX, VOWEL_MSG
-    MOV AH, 09H
-    INT 21H
-    MOV AX, VOWEL_COUNT
-    CALL PRINT_NUMBER  ; Print the vowel count
-
-    ; Print newline
-    MOV DL, 0DH        ; Carriage return
-    MOV AH, 02H
-    INT 21H
-    MOV DL, 0AH        ; Line feed
-    INT 21H
-
-    ; Print consonant count message
-    LEA DX, CONSONANT_MSG
-    MOV AH, 09H
-    INT 21H
-    MOV AX, CONSONANT_COUNT
-    CALL PRINT_NUMBER  ; Print the consonant count
-
-    ; Exit program
-    MOV AH, 4CH
-    INT 21H
-
-MAIN ENDP
-
-; Procedure to print a number in AX
-PRINT_NUMBER PROC
-    MOV BX, 10        ; Divisor for extracting digits
-    MOV CX, 0         ; Digit counter
-
-DIGIT_LOOP:
-    XOR DX, DX        ; Clear DX for division
-    DIV BX            ; AX / 10, quotient in AX, remainder in DX
-    PUSH DX           ; Save remainder (digit)
-    INC CX            ; Increment digit count
-    CMP AX, 0         ; Check if quotient is zero
-    JNE DIGIT_LOOP    ; If not, continue
-
-PRINT_DIGITS:
-    POP DX            ; Retrieve digit
-    ADD DL, '0'       ; Convert to ASCII
-    MOV AH, 02H
-    INT 21H           ; Print digit
-    LOOP PRINT_DIGITS ; Repeat for all digits
-    RET
-PRINT_NUMBER ENDP
-
-END MAIN
 
 
+; ---------------------------------------------------done---------------------------------------------------
 
-
-
-
-
-
-; This program reverses the input string and displays it
+; This program reverses the input "string" and displays it
 ; TITLE PGM8_1.ASM : REVERSE INPUT
 .MODEL SMALL
 .STACK 100H
@@ -429,6 +345,7 @@ END MAIN
 
 
 
+; ---------------------------------------------------done---------------------------------------------------
 
 
 ; TITLE PGM8_2.ASM : MULTIPLICATION BY ADD AND SHIFT
@@ -449,7 +366,7 @@ MULTIPLY PROC
   ;output: DX = product
 PUSH AX
 PUSH BX
-XOR DX, DX     ;product = 0
+XOR DX, DX  ; DX(0)
 REPEAT:
 ;if B is odd
     TEST BX, 1   ;is B odd?
@@ -469,6 +386,7 @@ MULTIPLY ENDP
 END MAIN
 
 
+; --------------------------------------------DONE----------------------------------------------------------
 
 ; reverses an array
 ; Program Listing PGM10_1.ASM
@@ -486,12 +404,12 @@ REVERSE PROC
     PUSH DI
 
     ; make DI point to nth word
-    MOV DI, SI    ; DI pts to 1st word
-    MOV CX, BX    ; CX = n
-    DEC BX        ; BX = n-1
-    SHL BX, 1     ; BX = 2 x (n-1)
-    ADD DI, BX    ; DI pts to nth word
-    SHR CX, 1     ; CX = n/2 = no. of swaps to do
+    MOV DI, SI    ; DI(ARRAY)
+    MOV CX, BX    ; CX(N)
+    DEC BX        ; BX(N-1)
+    SHL BX, 1     ; BX[2 x (n-1)]
+    ADD DI, BX    ; DI(ARRAY[N-1])
+    SHR CX, 1     ; CX(N/2)
 
     ; swap elements
 XCHG_LOOP:
@@ -511,37 +429,12 @@ XCHG_LOOP:
 REVERSE ENDP
 
 
-; adding array elements
-XOR AX, AX    ;AX holds sum
-XOR BX, BX    ;clear base register
-MOV CX, 10    ;CX has number of elements
-ADDNOS:
-    ADD AX, W[BX] ;sum = sum + element
-    ADD BX, 2     ;index next element
-    LOOP ADDNOS   ;loop until done
-
-
-Lower Case to Upper Case:
-MSG DB 'this is a message'
-; Solution:
-
-    MOV CX, 17      ; no. of chars in string
-    XOR SI, SI      ; SI indexes a char
-TOP:
-    CMP MSG[SI], 'a'
-    JL NEXT         ; below 'a', skip
-    CMP MSG[SI], 'z'
-    JG NEXT         ; above 'z', skip
-    AND MSG[SI], 0DFh ; no, convert to upper case
-NEXT:
-    INC SI          ; index next byte
-    LOOP TOP        ; loop until done
 
 
 
 
 
-
+; ---------------------------------------------------done---------------------------------------------------
 
 ; Sorting
 ; Program Listing PGM10_3.ASM
@@ -554,16 +447,19 @@ A DB 5,2,1,3,4
 MAIN PROC
     MOV AX, @DATA
     MOV DS, AX
+
     LEA SI, A
     MOV BX, 5
+
     CALL SELECT
+
     MOV AH, 4CH
     INT 21H
 MAIN ENDP
 
+
 ; select goes here
 END MAIN
-
 ; Program Listing PGM10_2.ASM
 ; SELECT PROC
 ; sorts a byte array by the selectsort method
@@ -572,39 +468,38 @@ END MAIN
 ; output: SI = offset of sorted array
 ; uses: PUSH BX, CX, DX, SI, DI
 
-SELECT PROC
+SELECT_SORT PROC
     PUSH BX
     PUSH CX
     PUSH DX
     PUSH SI
     PUSH DI
 
-    DEC BX      ; N = N-1
+    DEC BX       ; BX(N-1)
     JE  END_SORT ; exit if 1-elt array
-    MOV DX, SI  ; save array offset
-    ; for N-1 times do
+    MOV DX, SI   ; DX(ARR)
 
 SORT_LOOP:
-    MOV SI, DX  ; SI points to array
-    MOV CX, BX  ; no. of comparisons to make
-    MOV DI, SI  ; DI pts to largest element
-    MOV AL, [DI]; AL has largest element
+    MOV SI, DX  ; SI(ARR)
+    MOV CX, BX  ; CX(N-1,N-2....)
+    MOV DI, SI  ; DI(*LARGEST)
+    MOV AL, [DI]; AL(LARGEST)
     ; locate biggest of remaining elts
 
 FIND_BIG:
     INC SI      ; SI pts to next element
     CMP [SI], AL; is new element > largest?
     JNG NEXT    ; no, go on
-    MOV DI, SI  ; yes, move DI
-    MOV AL, [DI]; AL has largest element
+    MOV DI, SI  ; DI(*LARGEST)
+    MOV AL, [DI]; AL(LARGEST)
 
 NEXT:
-    LOOP FIND_BIG ; loop until done
+    LOOP FIND_BIG ; (CX=N-1)  N-1 SWAPS
 
-    ; swap biggest elt with last elt
-    CALL SWAP
-    DEC BX      ; N = N-1
-    JNE SORT_LOOP ; repeat if N <> 0
+                   ; swap biggest elt with last elt
+    CALL SWAP      ; SI(LAST_ARR_ELEMENT)
+    DEC BX         ; N = N-1
+    JNE SORT_LOOP  ; repeat if N <> 0
 
 END_SORT:
     POP SI
@@ -612,13 +507,13 @@ END_SORT:
     POP CX
     POP BX
     RET
-SELECT ENDP
+SELECT_SORT ENDP
 
 SWAP PROC
-; swaps two array elements
-; input: SI = points to one element
-;        DI = points to thr other element
-; output: exchange elements
+        ; swaps two array elements
+        ; input: SI = points to one element
+        ;        DI = points to thr other element
+        ; output: exchange elements
     PUSH AX       ; save AX
     MOV AL, [SI]  ; get A[i]
     XCHG AL, [DI] ; place in A[k]
@@ -630,6 +525,7 @@ SWAP ENDP
 
 
 
+; --------------------------------------------done----------------------------------------------------------
 
 ; Example 10.13 Suppose A is a 5 x 7 array stored in row-major
 ; order. Write some code to (1) clear row 3, (2) clear column 4.
@@ -672,11 +568,13 @@ CLEAR_COL_4:
 Additional Notes
 Stack Frame Consistency: The push bp; mov bp, sp pattern is standard in x8086 for creating stack frames, especially in recursive functions where multiple frames coexist.
 
-Parameter Access: Using [BP+4] is specific to this code’s stack layout. If more parameters were pushed, their offsets would increase (e.g., [BP+6], [BP+8]).
+Parameter Access: Using [BP+4] is specific to this codes stack layout. If more parameters were pushed, their offsets would increase (e.g., [BP+6], [BP+8]).
 
 MUL Details: The MUL instruction assumes the multiplicand is in AX. For 16-bit multiplication, the result is 32 bits (DX:AX), but we only use AX here since factorials for small n fit in 16 bits.
 
 
+
+; -----------------------------------------------done-------------------------------------------------------
 ; X8086 ASSEMBLY CODE FOR RECURSIVE FACTORIAL
 .MODEL SMALL
 .STACK 100H
@@ -703,7 +601,7 @@ MAIN ENDP
 FACTORIAL PROC
     PUSH BP         ; SAVE OLD BASE POINTER  now the stack looks like this:(n->return_address)
     MOV BP, SP      ; SET UP NEW STACK FRAME
-    PUSH AX         ; SAVE REGISTERS WE'LL MODIFY   
+    PUSH AX         ; SAVE REGISTERS WELL MODIFY   
     PUSH BX         ; 
 
     ; GET PARAMETER N FROM STACK (AT [BP+4])
@@ -737,7 +635,7 @@ FACTORIAL ENDP
 END MAIN
 
 
-;---------------------------------------------------------------------------------------------
+;-----------------------------------------done----------------------------------------------------
 ; Adding two numbers using recursion:
 ; x8086 Assembly code for recursive addition
 .model small
@@ -767,7 +665,8 @@ main endp
 add proc
     push bp         ; Save old base pointer
     mov bp, sp      ; Set up new stack frame
-    push bx         ; Save registers we'll modify
+
+    push bx         ; Save registers well modify
 
     ; Get parameters: a at [bp+6], b at [bp+4]
     mov ax, [bp+6]  ; Load a into AX
@@ -800,7 +699,7 @@ end main
 
 
 
-;---------------------------------------------------------------------------------------------------
+;---------------------------------------------done------------------------------------------------------
 
 ; x8086 Assembly code for recursive Fibonacci
 .model small
@@ -849,7 +748,7 @@ fibonacci proc
     push bx         ; Push n-1
     call fibonacci  ; AX = Fib(n-1)
     pop bx          ; Clean up stack
-    push ax         ; Save Fib(n-1) on stack
+    push ax         ; Save Fib(n-1) on stack, because ax after the second call will contain fib(n-2)
 
     ; Compute Fib(n-2)
     mov bx, cx      ; Restore n
