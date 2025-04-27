@@ -3,13 +3,13 @@ The output stops at $, leaving the cursor positioned at the start of a new line,
 
 
 
-If BX, SI, or DI contains the offset of the operand, 
+If BX, SI, or DI contains the offset of the operand,
 DS contains the segment number
-If BP contains the offset of the operand, 
+If BP contains the offset of the operand,
 SS contains the segment number
 
 
-Exchange the 10th and 25th elements 
+Exchange the 10th and 25th elements
 
 
 
@@ -22,7 +22,7 @@ Exchange the 10th and 25th elements
     ; Define the array of words (modify for different test cases)
     ARR DW 10, 20, 20, 30, 40, 50, 60, 70, 76, 80, 80, 100, 110, 120, 120, 120, 130
     ARR_LEN DW ($-ARR)/2  ; Calculate length of array (number of words)
-    
+
     MSG_ASC DB 'Ascending$'
     MSG_DESC DB 'Descending$'
     MSG_NOT DB 'Not sorted$'
@@ -117,7 +117,7 @@ END MAIN
 
 ; ---------------------------------------------------done---------------------------------------------------
 
-    
+
 ;------------------------------------------------------------
 ; Program: Vowel and Consonant Counter (x8086)
 ; Assembles with MASM/TASM, runs under DOS (INT 21h)
@@ -127,7 +127,7 @@ END MAIN
 .stack 100h                 ; 256-byte stack
 
 .data
-    inputStr   db 'qwertykeyboards', '$'  
+    inputStr   db 'qwertykeyboards', '$'
     msgVowel   db 'Vowel Count: $'
     msgConso   db 'Consonant Count: $'
     vowelCount dw 0       ; 2-byte counter for vowels
@@ -160,15 +160,15 @@ scan_loop:
     je  is_vowel
 
     ;—————— If we get here, it's a consonant ——————
-    inc word ptr consoCount
-    jmp cont_next_char
+    inc consoCount
+    inc si                ; move to next character
+    jmp scan_loop         ; repeat
 
 is_vowel:
     inc word ptr vowelCount
-
-cont_next_char:
     inc si                ; move to next character
     jmp scan_loop         ; repeat
+
 
 done_scanning:
     ;—————— Print "Vowel Count: " message ——————
@@ -195,84 +195,63 @@ done_scanning:
     mov ax, consoCount
     call PrintDecimal
 
-    ; Exit to DOS
-    mov ah, 4Ch
-    int 21h
 
-main endp
+
 
 ;------------------------------------------------------------
-; Subroutine: PrintDecimal
-; Prints the unsigned value in AX as decimal digits.
-; Destroys AX, CX, DX; preserves BX, SI, DI.
+; print_decimal:
+;   Input: AX = 16-bit unsigned number
+;   Clobbers: AX, DX, CX
+;   Preserves: BX, CX, DX
+;   Returns: nothing (digits emitted via INT 21h)
 ;------------------------------------------------------------
-; x8086 Assembly subroutine to print number in AX without newline
-.model small
-.stack 100h
-.data
-    num dw 1234    ; Example number to print
+print_decimal proc near
+    push    bp
+    mov     bp, sp
 
-.code
-main proc
-    mov ax, @data
-    mov ds, ax
+    push    bx          ; preserve BX
+    push    cx          ; preserve CX
+    push    dx          ; preserve DX
 
-    ; Call print_number with number in AX
-    mov ax, num    ; Load number into AX
-    call print_number
+    mov     cx, 0       ; digit count = 0
 
-    ; Exit program
-    mov ah, 4Ch
-    int 21h
-main endp
+    ; if AX == 0, just print '0'
+    cmp     ax, 0
+    jne     .extract
+    mov     dl, '0'
+    mov     ah, 2
+    int     21h
+    jmp     .done
 
-print_number proc
-    push bp        ; Save base pointer
-    mov bp, sp     ; Set up stack frame
-    push ax        ; Save registers used
-    push bx
-    push cx
-    push dx
+.extract:
+    ; repeatedly divide by 10, pushing remainders
+    ; until AX == 0
+    .loop_div:
+        xor     dx, dx     ; clear DX for DIV
+        mov     bx, 10
+        div     bx         ; AX = AX/10, DX = AX%10
+        push    dx         ; save digit
+        inc     cx         ; count++
+        cmp     ax, 0
+        jne     .loop_div
 
-    ; Handle special case: AX = 0
-    cmp ax, 0
-    jne not_zero
-    mov dl, '0'    ; Print '0'
-    mov ah, 02h
-    int 21h
-    jmp done
+    ; now CX = number of digits, and stack top has last digit
+    ; pop and print in correct order
+    .print_loop:
+        pop     dx         ; get next digit
+        add     dl, '0'    ; convert to ASCII
+        mov     ah, 2
+        int     21h
+        dec     cx
+        jnz     .print_loop
 
-not_zero:
-    mov cx, 0      ; CX = digit count
-    mov bx, 10     ; BX = 10 for division
-
-    ; Convert number to digits by dividing by 10
-digit_loop:
-    mov dx, 0      ; Clear DX for division
-    div bx         ; AX = AX / 10, DX = remainder (digit)
-    add dl, '0'    ; Convert digit to ASCII ('0' to '9')
-    push dx        ; Push ASCII digit onto stack
-    inc cx         ; Increment digit count
-    cmp ax, 0      ; Check if quotient is 0
-    jne digit_loop ; If not, continue
-
-    ; Print digits by popping from stack
-print_loop:
-    pop dx         ; Get digit from stack
-    mov ah, 02h    ; DOS function: print character
-    int 21h        ; Print digit
-    loop print_loop ; Repeat for all digits
-
-done:
-    pop dx         ; Restore registers
-    pop cx
-    pop bx
-    pop ax
-    pop bp         ; Restore base pointer
-    ret            ; Return to caller
-print_number endp
-
-end main
+.done:
+    pop     dx
+    pop     cx
+    pop     bx
+    pop     bp
+    ret
+print_decimal endp
 
 
 
@@ -316,6 +295,7 @@ WHILE_:
     MOV AH, 1
     INT 21H      ;read a char
     JMP WHILE_   ;loop back
+
 END_WHILE:
 
 ;go to a new line
@@ -436,91 +416,8 @@ REVERSE ENDP
 
 ; ---------------------------------------------------done---------------------------------------------------
 
-; Sorting
-; Program Listing PGM10_3.ASM
-TITLE PGM10_3: TEST SI
-.MODEL SMALL
-.STACK 100H
-.DATA
-A DB 5,2,1,3,4
-.CODE
-MAIN PROC
-    MOV AX, @DATA
-    MOV DS, AX
-
-    LEA SI, A
-    MOV BX, 5
-
-    CALL SELECT
-
-    MOV AH, 4CH
-    INT 21H
-MAIN ENDP
 
 
-; select goes here
-END MAIN
-; Program Listing PGM10_2.ASM
-; SELECT PROC
-; sorts a byte array by the selectsort method
-; input: SI = array offset address
-;        BX = number of elements
-; output: SI = offset of sorted array
-; uses: PUSH BX, CX, DX, SI, DI
-
-SELECT_SORT PROC
-    PUSH BX
-    PUSH CX
-    PUSH DX
-    PUSH SI
-    PUSH DI
-
-    DEC BX       ; BX(N-1)
-    JE  END_SORT ; exit if 1-elt array
-    MOV DX, SI   ; DX(ARR)
-
-SORT_LOOP:
-    MOV SI, DX  ; SI(ARR)
-    MOV CX, BX  ; CX(N-1,N-2....)
-    MOV DI, SI  ; DI(*LARGEST)
-    MOV AL, [DI]; AL(LARGEST)
-    ; locate biggest of remaining elts
-
-FIND_BIG:
-    INC SI      ; SI pts to next element
-    CMP [SI], AL; is new element > largest?
-    JNG NEXT    ; no, go on
-    MOV DI, SI  ; DI(*LARGEST)
-    MOV AL, [DI]; AL(LARGEST)
-
-NEXT:
-    LOOP FIND_BIG ; (CX=N-1)  N-1 SWAPS
-
-                   ; swap biggest elt with last elt
-    CALL SWAP      ; SI(LAST_ARR_ELEMENT)
-    DEC BX         ; N = N-1
-    JNE SORT_LOOP  ; repeat if N <> 0
-
-END_SORT:
-    POP SI
-    POP DX
-    POP CX
-    POP BX
-    RET
-SELECT_SORT ENDP
-
-SWAP PROC
-        ; swaps two array elements
-        ; input: SI = points to one element
-        ;        DI = points to thr other element
-        ; output: exchange elements
-    PUSH AX       ; save AX
-    MOV AL, [SI]  ; get A[i]
-    XCHG AL, [DI] ; place in A[k]
-    MOV [SI], AL  ; put A[k] in A[i]
-    POP AX        ; restore AX
-    RET
-SWAP ENDP
 
 
 
@@ -601,8 +498,9 @@ MAIN ENDP
 FACTORIAL PROC
     PUSH BP         ; SAVE OLD BASE POINTER  now the stack looks like this:(n->return_address)
     MOV BP, SP      ; SET UP NEW STACK FRAME
-    PUSH AX         ; SAVE REGISTERS WELL MODIFY   
-    PUSH BX         ; 
+
+    PUSH AX         ; SAVE REGISTERS WELL MODIFY
+    PUSH BX         ;
 
     ; GET PARAMETER N FROM STACK (AT [BP+4])
     MOV BX, [BP+4]
@@ -629,6 +527,7 @@ DONE:
     POP BX          ; RESTORE REGISTERS
     POP AX
     POP BP          ; RESTORE BASE POINTER
+
     RET             ; RETURN TO CALLER
 FACTORIAL ENDP
 
@@ -699,7 +598,7 @@ end main
 
 
 
-;---------------------------------------------done------------------------------------------------------
+;---------------------------------------------------------------------------------------------------
 
 ; x8086 Assembly code for recursive Fibonacci
 .model small
@@ -727,6 +626,7 @@ main endp
 fibonacci proc
     push bp         ; Save old base pointer
     mov bp, sp      ; Set up new stack frame
+
     push bx         ; Save registers we'll modify
     push cx
 
@@ -797,6 +697,7 @@ end main
 is_palindrome proc near
     push bp
     mov  bp, sp
+
     push si
     push di
 
@@ -834,6 +735,7 @@ palindrome_false:
 cleanup:
     pop  di
     pop  si
+
     pop  bp
     ret  2          ; remove the one-word argument
 is_palindrome endp
@@ -889,6 +791,7 @@ main endp
 factorial proc near
     push    bp
     mov     bp, sp
+
     push    bx          ; we'll use BX as temporary
 
     mov     ax, [bp+4]  ; AX = N
@@ -974,6 +877,7 @@ main endp
 gcd_proc proc near
     push    bp
     mov     bp, sp
+
     push    bx          ; we'll use BX
     push    dx          ; DIV will clobber DX
 
@@ -1026,7 +930,7 @@ main proc
     mov     ds, ax
 
     ; ——— Call reverse_str(&msg) ———
-    push    offset msg
+    push    offset msg  ; push offset msg → pushes the 16-bit address of msg.
     call    reverse_str
     ; (now MSG’s characters are reversed in memory)
 
@@ -1045,6 +949,7 @@ main endp
 reverse_str proc near
     push    bp
     mov     bp, sp
+
     push    si
     push    di
 
@@ -1076,6 +981,7 @@ swap_loop:
 done:
     pop     di
     pop     si
+
     pop     bp
     ret     2        ; pop the one-word parameter
 reverse_str endp
@@ -1136,6 +1042,7 @@ main endp
 sum_digits proc near
     push  bp
     mov   bp, sp
+
     push  bx        ; preserve registers well use
     push  dx
     push  cx
@@ -1211,6 +1118,7 @@ main endp
 sum_sq_digits proc near
     push  bp
     mov   bp, sp
+
     push  bx           ; we'll use BX
     push  dx           ; DIV/ MUL may clobber DX
     push  cx           ; CX will hold our accumulator
@@ -1297,7 +1205,7 @@ calc_s proc near
     mov   ax, [T]             ; AX = T
     mul   word ptr [T]        ; DX:AX = T*T (32-bit)
     shr   dx, 1               ; 32-bit right shift by 1 shr dx,1 moves all bits of DX right, putting its original bit 0 into CF.rcr ax,1
-    rcr   ax, 1 
+    rcr   ax, 1
     mov   bx, ax              ; BX = (T*T)/2
 
     ; --- term2 = term2 * A ---
@@ -1323,5 +1231,95 @@ end main
 
 
 
+
+
+
+;-------------------------------------------------------------------------------
+; Binary Search in a Sorted Word Array (x8086 MASM/TASM)
+;
+; Finds the index of `key` in a sorted array `arr[]`.
+; If found, stores the 0-based index in `resultIndex`; else stores 0FFFFh.
+;
+; Data:
+;   arr           dw 1,3,5,7,9,11,13,15   ; sorted array of 8 words
+;   count  equ   ($-arr)/2               ; number of elements (8)
+;   key           dw 7                    ; value to search for
+;   resultIndex   dw 0FFFFh               ; will hold index, or 0FFFFh if not found
+;
+; Registers used:
+;   CX = low index, DX = high index
+;   BX = base address of arr
+;   SI = mid index
+;   DI = search key
+;   AX = temporary for comparisons
+;-------------------------------------------------------------------------------
+
+.model small
+.stack 100h
+
+.data
+    arr         dw 1,3,5,7,9,11,13,15
+    key         dw 7
+    count       equ ($-arr)/2  ; Number of elements (8)
+    resultIndex dw 0FFFFh
+
+.code
+main proc
+    ; -- Initialize DS --
+    mov     ax, @data
+    mov     ds, ax
+
+    ; -- Load search key into DI --
+    mov     di, [key]        ; DI := key
+
+    ; -- Setup low/high indices --
+    xor     cx, cx           ; CX = low = 0
+    mov     dx, count-1      ; DX = high = count-1
+
+    ; -- Base address of arr in BX --
+    lea     bx, arr
+
+bs_loop:
+    cmp     cx, dx
+    ja      bs_notfound      ; if low > high, key not in array
+
+    ; -- mid = (low + high) / 2 --
+    mov     ax, cx
+    add     ax, dx
+    shr     ax, 1
+    mov     si, ax           ; SI = mid
+
+    ; -- load arr[mid] into AX --
+    mov     ax, [bx + si*2]
+
+    cmp     ax, di
+    je      bs_found         ; match!
+    jb      bs_lower         ; if array[mid] < key → search upper half
+
+    ; -- array[mid] > key → search lower half --
+bs_upper:
+    dec     si               ; new high = mid - 1
+    mov     dx, si
+    jmp     bs_loop
+
+bs_lower:
+    inc     si               ; new low = mid + 1
+    mov     cx, si
+    jmp     bs_loop
+
+bs_found:
+    mov     [resultIndex], si  ; store found index
+    jmp     bs_done
+
+bs_notfound:
+    mov     word ptr [resultIndex], 0FFFFh
+
+bs_done:
+    ; -- exit to DOS --
+    mov     ah, 4Ch
+    int     21h
+
+main endp
+end main
 
 
